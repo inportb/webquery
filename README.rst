@@ -9,14 +9,28 @@ Dependencies:
  - lxml
  - apsw
 
-Interactive shell:
- `./webquery.py *.yml`
+Interactive shell::
 
-Using a pipe:
- `echo "SELECT * FROM delicious_feeds_popular WHERE query='test' ORDER BY url DESC; SELECT url,title FROM microsoft_bing_web WHERE query='test' LIMIT 5;" | ./webquery.py *.yml`
+ ./webquery.py *.yml
 
-Limiting requests: (useful for sorting)
- `echo "UPDATE __webquery_v__ SET value=50 WHERE name='microsoft_bing_web_truncate'; SELECT title,url FROM microsoft_bing_web WHERE query='sushi' ORDER BY title;" | ./webquery.py *.yml`
+Using a pipe::
+
+ echo "SELECT * FROM delicious_feeds_popular WHERE query='test' ORDER BY url DESC; SELECT url,title FROM microsoft_bing_web WHERE query='test' LIMIT 5;" | ./webquery.py *.yml
+
+Limiting requests (useful for sorting)::
+
+ echo "SELECT webquery('microsoft_bing_web','truncate',50); SELECT title,url FROM microsoft_bing_web WHERE query='sushi' ORDER BY title;" | ./webquery.py *.yml
+
+In Python::
+
+ import apsw, webquery
+ db = apsw.Connection(':memory:')
+ webquery.attach(db)
+ cur = db.cursor()
+ cur.execute('CREATE VIRTUAL TABLE microsoft_bing_web USING webquery(microsoft.bing.web.yml);')
+ cur.execute('SELECT webquery("microsoft_bing_web","truncate",50);')
+ for title,url in cur.execute('SELECT title,url FROM microsoft_bing_web WHERE query="sushi" ORDER BY title;'):
+     print title,'>',url
 
 nb:
  - The ORDER BY clause does not map to server-side sorting; it sorts the results that are returned by the server.

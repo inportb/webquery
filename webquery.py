@@ -286,11 +286,28 @@ class WebQueryCursor(object):
 	def Close(self):
 		pass
 
+def attach(db,name='webquery'):
+	mod = WebQueryModule()
+	db.createmodule(name,mod)
+	cur = db.cursor()
+	def getter(table,key):
+		for row in cur.execute('SELECT value FROM __webquery_v__ WHERE name=?',(table+'_'+key,)):
+			return row[0]
+	def setter(table,key,value):
+		for row in cur.execute('SELECT value FROM __webquery_v__ WHERE name=?',(table+'_'+key,)):
+			v = row[0]
+			cur.execute('UPDATE __webquery_v__ SET value=? WHERE name=?',(value,table+'_'+key))
+			return v
+	db.createscalarfunction(name,getter,2)
+	db.createscalarfunction(name,setter,3)
+	return mod
+
+__all__ = ['WebQueryModule','attach']
+
 if __name__ == '__main__':
 	import sys, re
 	shell = apsw.Shell()
-	mod = WebQueryModule()
-	shell.db.createmodule('webquery',mod)
+	mod = attach(shell.db,'webquery')
 	loaded = []
 	for fn in sys.argv[1:]:
 		tbl = re.sub(r'\W','_',fn)
