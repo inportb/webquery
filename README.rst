@@ -38,9 +38,9 @@ In SQL::
  CREATE VIRTUAL TABLE table1 USING webquery(microsoft.bing.web.yml);
  -- load definition from the Web
  CREATE VIRTUAL TABLE table2 USING webquery(http://www.example.com/microsoft.bing.web.yml);
- -- get internal variable
+ -- get configuration variable
  SELECT webquery('table1','truncate');
- -- set internal variable and return previous value
+ -- set configuration variable and return previous value
  SELECT webquery('table1','truncate',50);
 
 nb:

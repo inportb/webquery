@@ -58,21 +58,21 @@ def xml2json(element):
 	return tag,dict(map(xml2json,element)) or element.text
 
 class WebQueryModule(object):
-	def __init__(self,opener=None):
+	def __init__(self,config,opener=None):
+		self.config = config
 		if opener is None:
 			opener = urllib2.build_opener()
 			opener.addheaders = [('user-agent',USERAGENT)]
 		self.opener = opener
-	def Create(self,connection,modulename,databasename,tablename,*args):
-		connection.cursor().execute('CREATE TEMP TABLE IF NOT EXISTS __webquery_v__ (name TEXT UNIQUE, value);');
-		return self.Connect(connection,modulename,databasename,tablename,*args)
 	def Connect(self,connection,modulename,databasename,tablename,*args):
-		table = WebQueryTable(connection,tablename,args[0],opener=self.opener)
+		table = WebQueryTable(connection,tablename,args[0],config=self.config,opener=self.opener)
 		return table.schema,table
+	Create = Connect
 
 class WebQueryTable(object):
-	def __init__(self,conn,name,definition,opener):
+	def __init__(self,conn,name,definition,config,opener):
 		self.conn = conn
+		self.config = config
 		self.opener = opener
 		if definition.startswith('data:'):
 			# load specification from string
@@ -94,14 +94,13 @@ class WebQueryTable(object):
 		self.Rename(name)
 		# get variables
 		self.cur = conn.cursor()
-		for k,v in spec.get('variable',{}).iteritems():
-			self.cur.execute('INSERT INTO __webquery_v__ (name,value) VALUES (?,?)',(name+'_'+k,v))
+		config[name] = spec.get('variable',{})
 	def variable_set(self,k,v):
-		self.cur.execute('UPDATE __webquery_v__ SET value=? WHERE name=?',(v,self.name+'_'+k))
+		self.config[self.name][k] = v
 	def variable_get(self,k):
-		for row in self.cur.execute('SELECT value FROM __webquery_v__ WHERE name=?',(self.name+'_'+k,)):
-			return row[0]
-		raise KeyError(self.name+'_'+k)
+		return self.config[self.name][k]
+	def variable_del(self,k):
+		del self.config[self.name][k]
 	def Rename(self,name):
 		try:
 			oldname = self.name
@@ -111,8 +110,8 @@ class WebQueryTable(object):
 		spec = self.spec
 		self.schema = 'CREATE TABLE %s (%s)'%(name,','.join(tuple('"'+item['field']+'" HIDDEN' for item in spec['binding']['select']['request']['mapping'])+tuple('"'+item['field']+'"' for item in spec['binding']['select']['response']['mapping'])))
 		if oldname is not None:
-			for k in spec.get('variable',{}):
-				self.cur.execute('UPDATE __webquery_v__ SET name=? WHERE name=?',(name+'_'+k,oldname+'_'+k))
+			self.config[name] = self.config[oldname]
+			del self.config[oldname]
 	def Open(self):
 		return WebQueryCursor(self)
 	def BestIndex(self,constraint,orderby):
@@ -135,9 +134,7 @@ class WebQueryTable(object):
 				constraintused.append(None)
 		return (constraintused,0,''.join(constraintnum),False,1024)
 	def Destroy(self):
-		name = self.name
-		for k in self.spec.get('variable',{}):
-			self.cur.execute('DELETE FROM __webquery_v__ WHERE name=?',(name+'_'+k,))
+		del self.config[self.name]
 	Disconnect=Destroy
 
 class WebQueryCursor(object):
@@ -287,17 +284,23 @@ class WebQueryCursor(object):
 		pass
 
 def attach(db,name='webquery'):
-	mod = WebQueryModule()
+	config = {}
+	mod = WebQueryModule(config)
 	db.createmodule(name,mod)
 	cur = db.cursor()
 	def getter(table,key):
-		for row in cur.execute('SELECT value FROM __webquery_v__ WHERE name=?',(table+'_'+key,)):
-			return row[0]
+		try:
+			return config[table][key]
+		except KeyError:
+			pass
 	def setter(table,key,value):
-		for row in cur.execute('SELECT value FROM __webquery_v__ WHERE name=?',(table+'_'+key,)):
-			v = row[0]
-			cur.execute('UPDATE __webquery_v__ SET value=? WHERE name=?',(value,table+'_'+key))
+		try:
+			t = config[table]
+			v = t.get(key,None)
+			t[key] = value
 			return v
+		except KeyError:
+			pass
 	db.createscalarfunction(name,getter,2)
 	db.createscalarfunction(name,setter,3)
 	return mod
