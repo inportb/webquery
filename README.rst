@@ -28,9 +28,20 @@ In Python::
  webquery.attach(db)
  cur = db.cursor()
  cur.execute('CREATE VIRTUAL TABLE microsoft_bing_web USING webquery(microsoft.bing.web.yml);')
- cur.execute('SELECT webquery("microsoft_bing_web","truncate",50);')
- for title,url in cur.execute('SELECT title,url FROM microsoft_bing_web WHERE query="sushi" ORDER BY title;'):
+ cur.execute('SELECT webquery(?,?,?);',('microsoft_bing_web','truncate',50))
+ for title,url in cur.execute('SELECT title,url FROM microsoft_bing_web WHERE query=? ORDER BY title;',('sushi',)):
      print title,'>',url
+
+In SQL::
+
+ -- load definition from a file
+ CREATE VIRTUAL TABLE table1 USING webquery(microsoft.bing.web.yml);
+ -- load definition from the Web
+ CREATE VIRTUAL TABLE table2 USING webquery(http://www.example.com/microsoft.bing.web.yml);
+ -- get internal variable
+ SELECT webquery('table1','truncate');
+ -- set internal variable and return previous value
+ SELECT webquery('table1','truncate',50);
 
 nb:
  - The ORDER BY clause does not map to server-side sorting; it sorts the results that are returned by the server.
